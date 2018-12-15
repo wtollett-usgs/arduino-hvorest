@@ -6,20 +6,20 @@
 #include "hvorestsettings.h"
 
 struct Routes {
-  char* method;
   char* name;
   void (*callback)(char* params, char* body, uint8_t* bodySize);
 };
 
 class HVORest {
   public:
-    HVORest(EthernetServer& client);
+    HVORest();
 
-    void addRoute(char* method, char* route, void (*f)(char*, char* params, uint8_t));
+    void addRoute(char* route, void (*f)(char*, char* params, uint8_t));
 
     void addData(char* name, char* val);
     void addData(char* name, int val);
-    void addData(char* name, float val);
+    void addData(char* name, float val, uint8_t precision);
+    void addData(char* name, char* val, bool quote);
 
     void handle(EthernetClient& client);
 
@@ -29,14 +29,20 @@ class HVORest {
     
     char buffer_[OUTPUT_BUFFER_SIZE];
     uint16_t bufferIndex_;
-    String name
 
-    void check();
+    String name;
+
+    void analog(uint8_t pin);
+    void digital(uint8_t pin);
+
+    void process();
     void reset();
     void jsonOpen();
     void jsonClose();
     void addToBuffer(char* value);
-    void send(uint8_t chunkSize, uint8_t delay);
+    void sendBuffer(EthernetClient& client);
+
+    void ftoa(double f, char* a, uint8_t precision);
 };
 
 #endif
