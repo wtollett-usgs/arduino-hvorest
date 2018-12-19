@@ -65,6 +65,8 @@ void HVORest::setName(String n) {
 void HVORest::process(EthernetClient* client) {
   bool gettingRoute = false;
   bool gettingParams = false;
+  String route_ = "";
+  String sPin_ = "";
 
   char c;
   while (client->connected() && client->available()) {
@@ -109,8 +111,6 @@ void HVORest::process(EthernetClient* client) {
 void HVORest::reset() {
   memset(&buffer_[0], 0, sizeof(buffer_));
   bufferIndex_ = 0;
-  route_ = "";
-  sPin_ = "";
 }
 
 void HVORest::jsonOpen() {

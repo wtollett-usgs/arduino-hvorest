@@ -13,7 +13,7 @@
 #endif
 
 #ifndef OUTPUT_BUFFER_SIZE
-#define OUTPUT_BUFFER_SIZE 500
+#define OUTPUT_BUFFER_SIZE 400
 #endif
 
 struct Routes {
@@ -44,8 +44,6 @@ class HVORest {
     uint16_t bufferIndex_;
 
     String name_;
-    String route_;
-    String sPin_;
 
     void process(EthernetClient* client);
     void reset();
