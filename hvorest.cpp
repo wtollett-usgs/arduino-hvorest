@@ -1,11 +1,8 @@
 #include "hvorest.h"
 
-HVORest::HVORest() : routesIndex_(0), bufferIndex_(0) {
-  addRoute("/analog", analog);
-  addRoute("/digital", digital);
-}
+HVORest::HVORest() : routesIndex_(0), bufferIndex_(0) {}
 
-void HVORest::addRoute(char* route, void (*f)(char* params, char* body, uint8_t bodySize)) {
+void HVORest::addRoute(char* route, void (*f)(uint8_t pinNum)) {
   routes_[routesIndex_].name = route;
   routes_[routesIndex_].callback = f;
   routesIndex_++;
@@ -17,11 +14,11 @@ void HVORest::addData(char* name, char* val) {
 
 void HVORest::addData(char* name, int val) {
   char str[10];
-  itoa(val, str);
+  itoa(val, str, 10);
   addData(name, str, false);
 }
 
-void HVORest::addData(char* name, float val) {
+void HVORest::addData(char* name, float val, uint8_t precision) {
   char str[20];
   ftoa(val, str, precision);
   addData(name, str, false);
@@ -47,13 +44,13 @@ void HVORest::handle(EthernetClient& client) {
     jsonOpen();
 
     // Process the input
-    process();
+    process(&client);
 
     // Finish output
     jsonClose();
 
     // Send result back
-    send();
+    sendBuffer(&client);
 
     // Disconnect and reset buffer
     client.stop();
@@ -61,23 +58,59 @@ void HVORest::handle(EthernetClient& client) {
   }
 }
 
-void HVORest::analog(uint8_t pin) {
-  addData(F("Value"), analogRead(pin));
-  addData(F("PinNumber"), pin);
+void HVORest::setName(String n) {
+  name_ = n;
 }
 
-void HVORest::digital(uint8_t pin) {
-  addData(F("Value"), digitalRead(pin));
-  addData(F("PinNumber"), pin);
-}
+void HVORest::process(EthernetClient* client) {
+  bool gettingRoute = false;
+  bool gettingParams = false;
 
-void HVORest::process() {
+  char c;
+  while (client->connected() && client->available()) {
+    c = client->read();
+    
+    if (c == '/') {
+      gettingRoute = !gettingRoute;
+      if (strcmp(route_.c_str(), "") != 0) {
+        // Function name has ended, need to get param now
+        gettingParams = true;
+      }
+      continue;
+    }
 
+    if (c == ' ') {
+      if (gettingRoute || gettingParams) {
+        // Route has ended, call function
+        for (uint8_t i = 0; i < routesIndex_; i++) {
+          if (strncmp(route_.c_str(), routes_[i].name, sizeof(routes_[i].name)) != 0) {
+            continue;
+          }
+
+          if (strcmp(sPin_.c_str(), "") == 0)
+            sPin_ = "1";
+          routes_[i].callback(atoi(sPin_.c_str()));
+        }
+        break;
+      }
+      continue;
+    }
+
+    if (gettingRoute) {
+      route_ += c;
+    }
+
+    if (gettingParams) {
+      sPin_ += c;
+    }
+  }
 }
 
 void HVORest::reset() {
   memset(&buffer_[0], 0, sizeof(buffer_));
   bufferIndex_ = 0;
+  route_ = "";
+  sPin_ = "";
 }
 
 void HVORest::jsonOpen() {
@@ -86,22 +119,33 @@ void HVORest::jsonOpen() {
 
 void HVORest::jsonClose() {
   addToBuffer(F("\"name\": \""));
-  addToBuffer(name);
+  addToBuffer(name_.c_str());
   addToBuffer(F("\" }"));
 }
 
 void HVORest::addToBuffer(char* val) {
   for (int i = 0; i < strlen(val); i++) {
-    buffer_[bufferIndex_++] = value[i];
+    buffer_[bufferIndex_++] = val[i];
   }
 }
 
-void HVORest::sendBuffer(EthernetClient& client) {
+void HVORest::addToBuffer(const __FlashStringHelper* val) {
+  uint8_t idx = 0;
+  PGM_P p = reinterpret_cast<PGM_P>(val);
+
+  for (unsigned char c = pgm_read_byte(p++);
+       c != 0 && bufferIndex_ < OUTPUT_BUFFER_SIZE;
+       c = pgm_read_byte(p++), bufferIndex_++) {
+    buffer_[bufferIndex_] = c;
+  }
+}
+
+void HVORest::sendBuffer(EthernetClient* client) {
   // Send HTTP Headers
-  client.println(HTTP_COMMON_HEADERS);
+  client->println(HTTP_COMMON_HEADERS);
 
   // Send everything else
-  client.print(buffer_);
+  client->print(buffer_);
 }
 
 void HVORest::ftoa(double f, char* a, uint8_t precision) {
